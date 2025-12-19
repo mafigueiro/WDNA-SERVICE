@@ -1,0 +1,89 @@
+name: python-testing
+run-name: Run tests and security analysis
+
+on: [push, pull_request, workflow_dispatch]
+
+env:
+  UV_PYTHON_DOWNLOADS: 0
+  UV_FROZEN: 1
+  LOG_LEVEL: INFO
+  DB_HOST: test
+  DB_PORT: 1234
+  DB_DB: test
+  DB_USER: test
+  DB_PASS: test
+
+jobs:
+  python-testing:
+    runs-on: [SI, standard]
+    container:
+      image: python:3.11-slim
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras --group test --group dev
+
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          uv run flake8 ./mymodule --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          uv run flake8 ./mymodule --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Test with pytest
+        run: |
+          uv run pytest -svv ./tests/unit --doctest-modules --junitxml=junit/test-results.xml
+
+      - name: Upload pytest test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: junit/**
+        # Use always() to always run this step to publish test results when there are test failures
+        if: always()
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: junit/*.xml # Format of test results
+
+  security:
+    needs: python-testing
+    runs-on: [SI, standard]
+    container:
+      image: python:3.11-slim
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+
+      - name: Bandit security check
+        run: |
+          uvx bandit -r mymodule/ -o security_report.txt -f 'txt'
+
+      - name: Report Bandit security check
+        uses: actions/upload-artifact@v4
+        with:
+          name: Security report
+          path: security_report.txt
+
+      - name: Create requirements.txt for next action
+        run: |
+          uv pip freeze > requirements.txt
+
+      - name: Security vulnerabilities scan
+        run: |
+          uvx safety check -r requirements.txt

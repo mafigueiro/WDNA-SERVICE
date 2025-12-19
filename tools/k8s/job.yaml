@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mymodule-job
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mymodule
+          image: docker.io/myproject/mymodule:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: mymodule-env
+          args: ["--help"]
+          resources:
+            limits:
+              memory: 2000Mi

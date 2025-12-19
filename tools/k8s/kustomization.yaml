@@ -1,0 +1,13 @@
+resources:
+  - job.yml
+
+configMapGenerator:
+- name: mymodule-env
+  envs:
+    - .env
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    type: generated
+  annotations:
+    note: generated
