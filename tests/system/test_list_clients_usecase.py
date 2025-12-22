@@ -1,11 +1,11 @@
-from mymodule.analytics.domain.entities.client import Client
-from mymodule.analytics.domain.services.client_manipulation_service import (
+from mymodule.wdna.domain.entities.client import Client
+from mymodule.wdna.domain.services.client_manipulation_service import (
     ClientManipulationService,
 )
-from mymodule.analytics.infrastructure.abstract_clients_repository import (
+from mymodule.wdna.infrastructure.abstract_clients_repository import (
     AbstractClientsRepository,
 )
-from mymodule.analytics.usecases.list_clients import ListClientsUseCase
+from mymodule.wdna.usecases.list_clients import ListClientsUseCase
 
 
 class MockClientRespository(AbstractClientsRepository):
