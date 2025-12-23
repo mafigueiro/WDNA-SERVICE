@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple,Literal
 
+from io import BytesIO  # noqa: F401  (se mantiene por compatibilidad si lo usas en el futuro)
 import pandas as pd
 
 
@@ -61,7 +61,11 @@ class MasterToEtlConfig:
     sheet_normal: str = "Normal"
     sheet_kpis: str = "KPIs_of_KPIs"
 
-    results_dirname: str = "results"  # 👈 NUEVO
+    results_dirname: str = "results"
+
+    csv_sep: str = ";"
+    csv_encoding: str = "utf-8-sig"
+    csv_engine: Literal["c", "python", "pyarrow", "python-fwf"] = "python"
 
 
 @dataclass(frozen=True)
@@ -86,7 +90,9 @@ class MasterToEtlService:
     def _validate_required_columns(self, df: pd.DataFrame) -> None:
         missing = [c for c in self.config.source_cols if c not in df.columns]
         if missing:
-            raise ValueError("Faltan columnas requeridas en el Excel de entrada: " + ", ".join(missing))
+            raise ValueError(
+                "Faltan columnas requeridas en el fichero de entrada: " + ", ".join(missing)
+            )
 
     def _filter_by_entity(self, df: pd.DataFrame, entity: str) -> pd.DataFrame:
         col = self.config.entity_col
@@ -109,6 +115,41 @@ class MasterToEtlService:
                 out[dest_col] = df[src_col].values
         return pd.DataFrame(out)
 
+    def _read_input_df(self, input_path: Path, sheet_name: str) -> pd.DataFrame:
+        """
+        Lee XLSX/XLSM/XLT* o CSV desde disco y devuelve DataFrame.
+        - Si es Excel, usa sheet_name.
+        - Si es CSV, ignora sheet_name.
+        """
+        suffix = input_path.suffix.lower()
+
+        if suffix == ".csv":
+            try:
+                return pd.read_csv(
+                    input_path,
+                    sep=self.config.csv_sep,
+                    encoding=self.config.csv_encoding,
+                    dtype=str,
+                    engine=self.config.csv_engine,
+                )
+            except Exception as e:
+                raise ValueError(
+                    f"No se pudo leer el CSV '{input_path}' "
+                    f"(sep='{self.config.csv_sep}', encoding='{self.config.csv_encoding}'): {e}"
+                ) from e
+
+        if suffix in (".xlsx", ".xlsm", ".xltx", ".xltm", ".xls"):
+            try:
+                return pd.read_excel(input_path, sheet_name=sheet_name)
+            except Exception as e:
+                raise ValueError(
+                    f"No se pudo leer el Excel '{input_path}' (sheet='{sheet_name}'): {e}"
+                ) from e
+
+        raise ValueError(
+            f"Formato no soportado: '{input_path.suffix}'. Usa Excel (.xlsx/.xlsm/...) o CSV (.csv)."
+        )
+
     def process_excel_path(
             self,
             input_path: str | Path,
@@ -116,17 +157,17 @@ class MasterToEtlService:
             sheet_name: str,
     ) -> Tuple[Path, MasterToEtlMeta]:
         """
-        Lee un XLSX desde disco, genera un XLSX en ./results/ y devuelve su path.
+        Lee un Excel/CSV desde disco, genera un XLSX en ./results/ y devuelve su path.
+
+        Output:
+          <input_dir>/results/<entity>_extracted.xlsx
         """
         input_path = Path(input_path)
 
         if not input_path.exists():
             raise ValueError(f"El fichero no existe: {input_path}")
 
-        try:
-            df = pd.read_excel(input_path, sheet_name=sheet_name)
-        except Exception as e:
-            raise ValueError(f"No se pudo leer el Excel '{input_path}' (sheet='{sheet_name}'): {e}") from e
+        df = self._read_input_df(input_path, sheet_name=sheet_name)
 
         self._validate_required_columns(df)
 
@@ -144,7 +185,6 @@ class MasterToEtlService:
             out_normal = out_normal.sort_values(by=sort_cols)
             out_kpis = out_kpis.sort_values(by=sort_cols)
 
-        # ✅ output en results/
         results_dir = input_path.parent / self.config.results_dirname
         results_dir.mkdir(parents=True, exist_ok=True)
 

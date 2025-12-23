@@ -3,16 +3,18 @@ PROJECT_NAME := mymodule
 DOCKER_IMAGE_TAG := $(BASE_PROJECT_NAME)/$(PROJECT_NAME)
 DOCKER_CONTAINER_NAME := $(BASE_PROJECT_NAME)-$(PROJECT_NAME)
 
-WDNA_INPUT ?= tools/data/masterdata_tel.xlsx
-WDNA_ENTITY ?= LCELL
+WDNA_INPUT ?= tools/data/masterdata_tel(masterdata).csv
+WDNA_ENTITY ?= UCELL
 WDNA_MASTER_SHEET ?= masterdata
-WDNA_ETLS_SHEET ?= ETLs
+WDNA_ETLS_SHEET ?= Normal
+WDNA_ETLS_ENTITY ?= LCELL
+WDNA_ETL_INPUT ?= tools/data/results/lcell_extracted.xlsx
 
 wdna-master-to-etl:  ## generate ETL excel from masterdata
 	uv run python -m mymodule.cli master-to-etl "$(WDNA_INPUT)" "$(WDNA_ENTITY)" --sheet-name "$(WDNA_MASTER_SHEET)"
 
 wdna-generate-sql:  ## generate SQL inserts from ETLs sheet
-	uv run python -m mymodule.cli generate-sql "$(WDNA_INPUT)" "$(WDNA_ENTITY)" --sheet-name "$(WDNA_ETLS_SHEET)"
+	uv run python -m mymodule.cli generate-sql "$(WDNA_ETL_INPUT)" "$(WDNA_ETLS_ENTITY)" --sheet-name "$(WDNA_ETLS_SHEET)"
 
 install-dev:  ## install dev and test dependencies
 	uv lock
